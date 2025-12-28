@@ -165,6 +165,68 @@ class BookingViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(booking)
         return Response(serializer.data)
     
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Cancel a booking (customer or provider can cancel)."""
+        booking = self.get_object()
+        
+        # Only customer or provider can cancel
+        if request.user != booking.customer and request.user != booking.provider.user:
+            return Response(
+                {'error': 'You do not have permission to cancel this booking'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Cannot cancel if already completed or cancelled
+        if booking.status == 'completed':
+            return Response(
+                {'error': 'Cannot cancel a completed booking'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if booking.status == 'cancelled':
+            return Response(
+                {'error': 'Booking is already cancelled'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        booking.status = 'cancelled'
+        booking.save()
+        
+        # Create notification for the other party
+        try:
+            if request.user == booking.customer:
+                # Customer cancelled - notify provider
+                service_name = booking.service_category.name if booking.service_category else 'Service'
+                customer_name = booking.customer.get_full_name() or booking.customer.username
+                notification = Notification.objects.create(
+                    user=booking.provider.user,
+                    title='Booking Cancelled',
+                    message=f'{customer_name} has cancelled the booking for {service_name}',
+                    notification_type='booking_cancelled',
+                    related_id=booking.id
+                )
+            else:
+                # Provider cancelled - notify customer
+                service_name = booking.service_category.name if booking.service_category else 'Service'
+                provider_name = booking.provider.name or booking.provider.user.username
+                notification = Notification.objects.create(
+                    user=booking.customer,
+                    title='Booking Cancelled',
+                    message=f'{provider_name} has cancelled your booking for {service_name}',
+                    notification_type='booking_cancelled',
+                    related_id=booking.id
+                )
+            print(f"✅ Created cancellation notification {notification.id}")
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to create cancellation notification for booking {booking.id}: {str(e)}")
+            print(f"❌ Failed to create cancellation notification for booking {booking.id}: {str(e)}")
+        
+        serializer = self.get_serializer(booking)
+        return Response(serializer.data)
+    
     @action(detail=False, methods=['get'])
     def my_requests(self, request):
         """Get requests for current provider (accepted and pending)."""
