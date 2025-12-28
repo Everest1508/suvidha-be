@@ -19,8 +19,14 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+# Customize admin site
+admin.site.site_header = "Suvidha Connect Admin Panel"
+admin.site.site_title = "Suvidha Connect Admin"
+admin.site.index_title = "Welcome to Suvidha Connect Administration"
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', include('landing.urls')),
     path('api/auth/', include('accounts.urls')),
     path('api/services/', include('services.urls')),
     path('api/', include('providers.urls')),

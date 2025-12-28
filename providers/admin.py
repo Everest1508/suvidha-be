@@ -114,7 +114,14 @@ class ServiceProviderAdmin(admin.ModelAdmin):
         if change and 'verification_status' in form.changed_data:
             if obj.verification_status == 'approved' and not obj.verified_by:
                 obj.verified_by = request.user
+            if obj.verification_status == 'approved' and not obj.verified_at:
+                from django.utils import timezone
+                obj.verified_at = timezone.now()
         super().save_model(request, obj, form, change)
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('user', 'verified_by').prefetch_related('services')
 
 
 @admin.register(ProviderService)
