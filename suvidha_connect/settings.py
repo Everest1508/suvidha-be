@@ -25,7 +25,12 @@ SECRET_KEY = 'django-insecure-0i5asgmw#@zde)$4tcvuj&#(d4ic^x#y9g=$qv_60!r1*c*jt#
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']  # For development - restrict in production
+ALLOWED_HOSTS = [
+    'suvidhaconnect.pythonanywhere.com',
+    'localhost',
+    '127.0.0.1',
+    '*',  # For development - remove in production
+]
 
 
 # Application definition
@@ -51,6 +56,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add WhiteNoise after SecurityMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -63,6 +69,7 @@ MIDDLEWARE = [
 
 # CSRF settings for API
 CSRF_TRUSTED_ORIGINS = [
+    'https://suvidhaconnect.pythonanywhere.com',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://10.0.2.2:8000',  # Android emulator
@@ -146,17 +153,21 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# WhiteNoise configuration for serving static files
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
+    "https://suvidhaconnect.pythonanywhere.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+CORS_ALLOW_ALL_ORIGINS = True  # For development only - set to False in production
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
     'accept',
