@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'providers',
     'services',
     'reviews',
-    'notifications',
+    'notifications.apps.NotificationsConfig',
     'bookings',
     'addresses',
     'landing',
@@ -196,3 +196,28 @@ REST_FRAMEWORK = {
 
 # Custom User Model
 AUTH_USER_MODEL = 'accounts.User'
+
+# Session Configuration
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Store sessions in database
+SESSION_COOKIE_NAME = 'sessionid'
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30  # 30 days (in seconds)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Keep session alive after browser/app closes
+SESSION_SAVE_EVERY_REQUEST = False  # Only save session when modified
+SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to cookie
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+SESSION_COOKIE_PATH = '/'  # Cookie available for entire site
+
+# Firebase Cloud Messaging (FCM) HTTP v1 API Settings
+# The legacy FCM API is deprecated. We now use FCM HTTP v1 API with service account.
+
+# Your Firebase Project ID (found in Firebase Console > Project Settings > General)
+# Example: 'suvidha-2fb5d'
+FCM_PROJECT_ID = 'suvidha-2fb5d'
+
+# Path to your Service Account JSON file
+# Download from: Firebase Console > Project Settings > Service Accounts > Generate new private key
+# Place the JSON file in your backend directory and set the path here
+# Example: BASE_DIR / 'firebase-service-account.json'
+# Or use absolute path: '/path/to/your/firebase-service-account.json'
+FCM_SERVICE_ACCOUNT_JSON_PATH = BASE_DIR / 'firebase-service-account.json'

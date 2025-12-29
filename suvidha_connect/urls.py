@@ -28,6 +28,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('landing.urls')),
     path('api/auth/', include('accounts.urls')),
+    path('api/wallets/', include('accounts.wallet_urls')),  # Wallet endpoints
+    path('api/bank-accounts/', include('accounts.bank_account_urls')),  # Bank account endpoints
+    path('api/withdrawals/', include('accounts.withdrawal_urls')),  # Withdrawal endpoints
     path('api/services/', include('services.urls')),
     path('api/', include('providers.urls')),
     path('api/reviews/', include('reviews.urls')),

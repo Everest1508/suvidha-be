@@ -3,4 +3,7 @@ djangorestframework==3.16.1
 django-cors-headers==4.9.0
 Pillow==12.0.0
 whitenoise==6.8.2
-
+requests
+google-auth==2.35.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0

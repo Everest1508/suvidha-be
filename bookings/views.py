@@ -9,6 +9,11 @@ from django.utils import timezone
 from .models import Booking
 from .serializers import BookingSerializer
 from notifications.models import Notification
+import requests
+import json
+from django.conf import settings
+import os
+from pathlib import Path
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -66,6 +71,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                     related_id=booking.id
                 )
                 print(f"✅ Created notification {notification.id} for provider {provider_user.username} about booking {booking.id}")
+                # Push notification will be sent automatically via signal
             except Exception as e:
                 # Log error but don't fail the booking creation
                 import logging
@@ -80,6 +86,46 @@ class BookingViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'])
+    def start_negotiation(self, request, pk=None):
+        """Start negotiation for a booking (provider only)."""
+        booking = self.get_object()
+        
+        if request.user.role != 'provider':
+            return Response(
+                {'error': 'Only providers can start negotiation'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if booking.status != 'pending':
+            return Response(
+                {'error': f'Cannot start negotiation. Current status: {booking.get_status_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        booking.status = 'negotiation'
+        booking.save()
+        
+        # Create notification for customer
+        try:
+            customer_name = booking.customer.get_full_name() or booking.customer.username
+            service_name = booking.service_category.name if booking.service_category else 'Service'
+            notification = Notification.objects.create(
+                user=booking.customer,
+                title='Negotiation Started',
+                message=f'Provider has started negotiation for {service_name}. You can now chat to discuss details.',
+                notification_type='booking_negotiation',
+                related_id=booking.id
+            )
+            print(f"✅ Created notification {notification.id} for customer {booking.customer.username} about negotiation {booking.id}")
+        except Exception as e:
+            print(f"❌ Failed to create notification: {str(e)}")
+        
+        return Response(
+            self.get_serializer(booking).data,
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
         """Accept a booking request (provider only)."""
         booking = self.get_object()
@@ -90,7 +136,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        if booking.status != 'pending':
+        if booking.status not in ['pending', 'negotiation']:
             return Response(
                 {'error': f'Booking is already {booking.status}'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -139,7 +185,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        booking.status = 'completed'
+        booking.status = 'payment'
         booking.completed_at = timezone.now()
         booking.save()
         
@@ -166,8 +212,171 @@ class BookingViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Reject a booking during negotiation (customer or provider can reject)."""
+        booking = self.get_object()
+        
+        # Only customer or provider can reject
+        if request.user != booking.customer and request.user != booking.provider.user:
+            return Response(
+                {'error': 'You do not have permission to reject this booking'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Can only reject during negotiation
+        if booking.status != 'negotiation':
+            return Response(
+                {'error': f'Can only reject during negotiation. Current status: {booking.get_status_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        booking.status = 'cancelled'
+        booking.save()
+        
+        # Create notification for the other party
+        try:
+            other_user = booking.customer if request.user == booking.provider.user else booking.provider.user
+            service_name = booking.service_category.name if booking.service_category else 'Service'
+            notification = Notification.objects.create(
+                user=other_user,
+                title='Booking Rejected',
+                message=f'Booking for {service_name} has been rejected during negotiation.',
+                notification_type='booking_cancelled',
+                related_id=booking.id
+            )
+            print(f"✅ Created notification {notification.id} for user {other_user.username} about rejection {booking.id}")
+        except Exception as e:
+            print(f"❌ Failed to create notification: {str(e)}")
+        
+        return Response(
+            self.get_serializer(booking).data,
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=['post'])
+    def propose_price(self, request, pk=None):
+        """Propose a new price during negotiation (both customer and provider can propose)."""
+        booking = self.get_object()
+        
+        # Only customer or provider can propose
+        if request.user != booking.customer and request.user != booking.provider.user:
+            return Response(
+                {'error': 'Only the customer or provider can propose a price'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if booking.status != 'negotiation':
+            return Response(
+                {'error': f'Can only propose price during negotiation. Current status: {booking.get_status_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if booking.price_locked:
+            return Response(
+                {'error': 'Price is already locked and cannot be changed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        proposed_price = request.data.get('price')
+        if not proposed_price:
+            return Response(
+                {'error': 'price is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            price_decimal = float(proposed_price)
+            if price_decimal <= 0:
+                return Response(
+                    {'error': 'Price must be greater than 0'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'Invalid price format'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        booking.proposed_price = price_decimal
+        booking.proposed_by = request.user
+        booking.save()
+        
+        # Create notification for the other party
+        try:
+            other_user = booking.customer if request.user == booking.provider.user else booking.provider.user
+            service_name = booking.service_category.name if booking.service_category else 'Service'
+            proposer_name = request.user.get_full_name() or request.user.username
+            notification = Notification.objects.create(
+                user=other_user,
+                title='New Price Proposed',
+                message=f'{proposer_name} has proposed a price of Rs. {price_decimal}/- for {service_name}. You can accept or propose a different price.',
+                notification_type='booking_negotiation',
+                related_id=booking.id
+            )
+            print(f"✅ Created notification {notification.id} for user {other_user.username} about price proposal {booking.id}")
+        except Exception as e:
+            print(f"❌ Failed to create notification: {str(e)}")
+        
+        return Response(
+            self.get_serializer(booking).data,
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=['post'])
+    def accept_price(self, request, pk=None):
+        """Accept the proposed price and move to accepted status (both parties can accept)."""
+        booking = self.get_object()
+        
+        # Only customer or provider can accept
+        if request.user != booking.customer and request.user != booking.provider.user:
+            return Response(
+                {'error': 'Only the customer or provider can accept the price'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if booking.status != 'negotiation':
+            return Response(
+                {'error': f'Can only accept price during negotiation. Current status: {booking.get_status_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not booking.proposed_price:
+            return Response(
+                {'error': 'No price has been proposed yet'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Lock the price and move to accepted
+        booking.price = booking.proposed_price
+        booking.price_locked = True
+        booking.status = 'accepted'
+        booking.accepted_at = timezone.now()
+        booking.save()
+        
+        # Create notification for the other party
+        try:
+            other_user = booking.customer if request.user == booking.provider.user else booking.provider.user
+            service_name = booking.service_category.name if booking.service_category else 'Service'
+            accepter_name = request.user.get_full_name() or request.user.username
+            notification = Notification.objects.create(
+                user=other_user,
+                title='Price Accepted',
+                message=f'{accepter_name} has accepted the price of Rs. {booking.price}/- for {service_name}. Booking is now accepted.',
+                notification_type='booking_accepted',
+                related_id=booking.id
+            )
+            print(f"✅ Created notification {notification.id} for user {other_user.username} about price acceptance {booking.id}")
+        except Exception as e:
+            print(f"❌ Failed to create notification: {str(e)}")
+        
+        return Response(
+            self.get_serializer(booking).data,
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
-        """Cancel a booking (customer or provider can cancel)."""
+        """Cancel a booking (customer or provider can cancel in negotiation or accepted states)."""
         booking = self.get_object()
         
         # Only customer or provider can cancel
@@ -187,6 +396,13 @@ class BookingViewSet(viewsets.ModelViewSet):
         if booking.status == 'cancelled':
             return Response(
                 {'error': 'Booking is already cancelled'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Can cancel in negotiation or accepted states
+        if booking.status not in ['negotiation', 'accepted', 'in_progress']:
+            return Response(
+                {'error': f'Can only cancel bookings in negotiation, accepted, or in_progress states. Current status: {booking.get_status_display()}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -227,6 +443,91 @@ class BookingViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(booking)
         return Response(serializer.data)
     
+    @action(detail=True, methods=['post'])
+    def pay(self, request, pk=None):
+        """Pay for completed booking (customer only)."""
+        booking = self.get_object()
+        
+        if request.user != booking.customer:
+            return Response(
+                {'error': 'Only the customer can pay for this booking'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if booking.status != 'payment':
+            return Response(
+                {'error': f'Booking is not ready for payment. Current status: {booking.get_status_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not booking.price:
+            return Response(
+                {'error': 'Booking price is not set'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get customer wallet
+        from accounts.models import Wallet, WalletTransaction
+        customer_wallet, _ = Wallet.objects.get_or_create(user=booking.customer)
+        
+        # Check if customer has sufficient balance
+        if customer_wallet.balance < booking.price:
+            return Response(
+                {'error': 'Insufficient wallet balance. Please add money to your wallet.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get provider wallet
+        provider_wallet, _ = Wallet.objects.get_or_create(user=booking.provider.user)
+        
+        # Process payment
+        from django.db import transaction as db_transaction
+        from decimal import Decimal
+        with db_transaction.atomic():
+            # Deduct from customer wallet
+            customer_wallet.deduct_money(booking.price)
+            WalletTransaction.objects.create(
+                wallet=customer_wallet,
+                transaction_type='payment',
+                amount=booking.price,
+                description=f'Payment for booking #{booking.id}',
+                related_booking=booking
+            )
+            
+            # Add to provider wallet
+            provider_wallet.add_money(booking.price)
+            WalletTransaction.objects.create(
+                wallet=provider_wallet,
+                transaction_type='received',
+                amount=booking.price,
+                description=f'Payment received for booking #{booking.id}',
+                related_booking=booking
+            )
+            
+            # Update booking status to completed
+            booking.status = 'completed'
+            booking.save()
+        
+        # Create notification for provider
+        try:
+            service_name = booking.service_category.name if booking.service_category else 'Service'
+            customer_name = booking.customer.get_full_name() or booking.customer.username
+            notification = Notification.objects.create(
+                user=booking.provider.user,
+                title='Payment Received',
+                message=f'You have received Rs. {booking.price}/- from {customer_name} for {service_name}.',
+                notification_type='payment_received',
+                related_id=booking.id
+            )
+            print(f"✅ Created notification {notification.id} for provider {booking.provider.user.username} about payment {booking.id}")
+        except Exception as e:
+            print(f"❌ Failed to create notification: {str(e)}")
+        
+        return Response(
+            self.get_serializer(booking).data,
+            status=status.HTTP_200_OK
+        )
+    
     @action(detail=False, methods=['get'])
     def my_requests(self, request):
         """Get requests for current provider (accepted and pending)."""
@@ -251,4 +552,9 @@ class BookingViewSet(viewsets.ModelViewSet):
                 {'error': 'Provider profile not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+# Push notifications are now handled automatically via Django signals
+# See: notifications/signals.py
+# The signal automatically sends push notifications when a Notification is created
 

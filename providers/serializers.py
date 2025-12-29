@@ -40,6 +40,9 @@ class ServiceProviderSerializer(serializers.ModelSerializer):
             'verification_status', 'onboarding_step', 'is_onboarding_complete',
             'services', 'service_ids',
             'average_rating', 'total_reviews',
+            'is_available', 'available_from_day', 'available_to_day',
+            'available_start_time', 'available_end_time',
+            'min_price', 'max_price',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['verification_status', 'verified_at', 'verified_by']

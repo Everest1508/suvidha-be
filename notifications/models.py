@@ -8,6 +8,7 @@ class Notification(models.Model):
         ('booking_created', 'New Booking Request'),
         ('booking_confirmed', 'Booking Confirmed'),
         ('booking_accepted', 'Booking Accepted'),
+        ('booking_negotiation', 'Booking Negotiation'),
         ('booking_completed', 'Booking Completed'),
         ('booking_cancelled', 'Booking Cancelled'),
         ('service_completed', 'Service Completed'),

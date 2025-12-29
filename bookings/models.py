@@ -8,9 +8,11 @@ class Booking(models.Model):
     """Booking/Request model for service bookings"""
     STATUS_CHOICES = [
         ('pending', 'Pending'),
+        ('negotiation', 'Negotiation'),
         ('accepted', 'Accepted'),
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
+        ('payment', 'Payment'),
         ('cancelled', 'Cancelled'),
     ]
     
@@ -38,6 +40,16 @@ class Booking(models.Model):
     address = models.TextField(help_text="Service address")
     scheduled_date = models.DateTimeField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    proposed_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Currently proposed price during negotiation")
+    proposed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='price_proposals',
+        help_text="User who proposed the current price"
+    )
+    price_locked = models.BooleanField(default=False, help_text="Price is locked after acceptance")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     accepted_at = models.DateTimeField(null=True, blank=True)

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
-from .models import User
+from .models import User, BankAccount
 
 
 @admin.register(User)
@@ -65,3 +65,5 @@ class UserAdmin(BaseUserAdmin):
         updated = queryset.update(is_active=True)
         self.message_user(request, f'{updated} user(s) activated.')
     activate_users.short_description = 'Activate selected users'
+
+admin.site.register(BankAccount)

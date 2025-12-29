@@ -57,6 +57,95 @@ class ServiceProvider(models.Model):
     onboarding_step = models.IntegerField(default=1, help_text="Current onboarding step (1, 2, or 3)")
     is_onboarding_complete = models.BooleanField(default=False)
     
+    # Availability Schedule
+    DAY_CHOICES = [
+        ('monday', 'Monday'),
+        ('tuesday', 'Tuesday'),
+        ('wednesday', 'Wednesday'),
+        ('thursday', 'Thursday'),
+        ('friday', 'Friday'),
+        ('saturday', 'Saturday'),
+        ('sunday', 'Sunday'),
+    ]
+    
+    available_from_day = models.CharField(
+        max_length=10,
+        choices=DAY_CHOICES,
+        null=True,
+        blank=True,
+        help_text="First day of availability (e.g., Monday)"
+    )
+    available_to_day = models.CharField(
+        max_length=10,
+        choices=DAY_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Last day of availability (e.g., Friday)"
+    )
+    available_start_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Start time of availability (e.g., 09:00)"
+    )
+    available_end_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="End time of availability (e.g., 17:00)"
+    )
+    
+    # Pricing
+    min_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Minimum price the provider charges")
+    max_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Maximum price the provider charges")
+    
+    @property
+    def is_available(self):
+        """Check if provider is currently available based on schedule"""
+        from django.utils import timezone
+        from datetime import datetime, time
+        
+        # If no schedule is set, consider as not available
+        if not self.available_from_day or not self.available_to_day:
+            return False
+        
+        if not self.available_start_time or not self.available_end_time:
+            return False
+        
+        now = timezone.now()
+        current_day = now.strftime('%A').lower()
+        current_time = now.time()
+        
+        # Map day names to numbers for comparison
+        day_map = {
+            'monday': 0,
+            'tuesday': 1,
+            'wednesday': 2,
+            'thursday': 3,
+            'friday': 4,
+            'saturday': 5,
+            'sunday': 6,
+        }
+        
+        current_day_num = day_map.get(current_day, -1)
+        from_day_num = day_map.get(self.available_from_day, -1)
+        to_day_num = day_map.get(self.available_to_day, -1)
+        
+        if current_day_num == -1 or from_day_num == -1 or to_day_num == -1:
+            return False
+        
+        # Check if current day is within range
+        if from_day_num <= to_day_num:
+            # Normal range (e.g., Monday to Friday)
+            day_in_range = from_day_num <= current_day_num <= to_day_num
+        else:
+            # Wrapping range (e.g., Friday to Monday)
+            day_in_range = current_day_num >= from_day_num or current_day_num <= to_day_num
+        
+        if not day_in_range:
+            return False
+        
+        # Check if current time is within range
+        return self.available_start_time <= current_time <= self.available_end_time
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

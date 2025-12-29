@@ -17,6 +17,10 @@ db.sqlite3-journal
 /media
 /staticfiles
 
+# Firebase Service Account (sensitive credentials)
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+
 # IDE
 .vscode/
 .idea/

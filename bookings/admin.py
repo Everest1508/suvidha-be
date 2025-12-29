@@ -40,9 +40,11 @@ class BookingAdmin(admin.ModelAdmin):
     def status_display(self, obj):
         colors = {
             'pending': '#FFA500',
+            'negotiation': '#FF9800',
             'accepted': '#2196F3',
             'in_progress': '#9C27B0',
             'completed': '#4CAF50',
+            'payment': '#9C27B0',
             'cancelled': '#F44336',
         }
         color = colors.get(obj.status, '#666')

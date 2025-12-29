@@ -11,6 +11,7 @@ class BookingSerializer(serializers.ModelSerializer):
     customer = UserSerializer(read_only=True)
     provider = ServiceProviderSerializer(read_only=True)
     service_category = ServiceCategorySerializer(read_only=True)
+    proposed_by = UserSerializer(read_only=True)
     customer_name = serializers.SerializerMethodField()
     provider_name = serializers.SerializerMethodField()
     service_name = serializers.SerializerMethodField()
@@ -32,11 +33,11 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'customer', 'provider', 'service_category',
             'status', 'description', 'address', 'scheduled_date',
-            'price', 'created_at', 'updated_at', 'accepted_at', 'completed_at',
+            'price', 'proposed_price', 'proposed_by', 'price_locked', 'created_at', 'updated_at', 'accepted_at', 'completed_at',
             'customer_name', 'provider_name', 'service_name',
             'provider_id', 'service_category_id'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'accepted_at', 'completed_at', 'customer', 'status']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'accepted_at', 'completed_at', 'customer', 'status', 'price_locked', 'proposed_by']
     
     def get_customer_name(self, obj):
         return obj.customer.get_full_name() or obj.customer.username
