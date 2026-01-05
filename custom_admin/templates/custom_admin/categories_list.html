@@ -1,0 +1,89 @@
+{% extends "custom_admin/base.html" %}
+
+{% block title %}Service Categories{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Service Categories</h1>
+    <a href="{% url 'custom_admin:category_add' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Add New Category
+    </a>
+</div>
+
+<div class="content-card">
+    <form method="get" class="mb-3">
+        <div class="row">
+            <div class="col-md-4">
+                <input type="text" name="search" class="form-control" placeholder="Search categories..." value="{{ search_query }}">
+            </div>
+            <div class="col-md-3">
+                <select name="active" class="form-control">
+                    <option value="">All Status</option>
+                    <option value="true" {% if active_filter == 'true' %}selected{% endif %}>Active</option>
+                    <option value="false" {% if active_filter == 'false' %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Filter</button>
+            </div>
+            <div class="col-md-2">
+                <a href="{% url 'custom_admin:categories_list' %}" class="btn btn-secondary w-100">Reset</a>
+            </div>
+        </div>
+    </form>
+    
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th style="width: 60px;">ID</th>
+                    <th style="min-width: 150px;">Name</th>
+                    <th style="min-width: 120px;">Slug</th>
+                    <th style="min-width: 200px;">Icon</th>
+                    <th>Description</th>
+                    <th style="width: 100px;">Status</th>
+                    <th style="width: 180px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for category in categories %}
+                <tr>
+                    <td>{{ category.id }}</td>
+                    <td><strong>{{ category.name }}</strong></td>
+                    <td><code style="font-size: 12px;">{{ category.slug }}</code></td>
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 180px;">
+                            <code style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 11px; display: inline-block; width: fit-content;">{{ category.icon }}</code>
+                            <small style="color: #6b7280; font-size: 12px; display: block;">{{ category.icon_display }}</small>
+                        </div>
+                    </td>
+                    <td style="max-width: 200px;">{{ category.description|truncatewords:8|default:"-" }}</td>
+                    <td>
+                        {% if category.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                            <a href="{% url 'custom_admin:category_edit' category.id %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-pencil"></i> Edit
+                            </a>
+                            <a href="{% url 'custom_admin:category_delete' category.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this category?')">
+                                <i class="bi bi-trash"></i> Delete
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted">No categories found</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,137 @@
+{% extends "custom_admin/base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Dashboard</h1>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="stat-card primary">
+            <div class="stat-icon"><i class="bi bi-people"></i></div>
+            <h3>{{ stats.total_users }}</h3>
+            <p>Total Users</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card success">
+            <div class="stat-icon"><i class="bi bi-person-check"></i></div>
+            <h3>{{ stats.total_customers }}</h3>
+            <p>Customers</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card info">
+            <div class="stat-icon"><i class="bi bi-briefcase"></i></div>
+            <h3>{{ stats.total_providers }}</h3>
+            <p>Service Providers</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card warning">
+            <div class="stat-icon"><i class="bi bi-clock-history"></i></div>
+            <h3>{{ stats.pending_providers }}</h3>
+            <p>Pending Approval</p>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="stat-card success">
+            <div class="stat-icon"><i class="bi bi-check-circle"></i></div>
+            <h3>{{ stats.approved_providers }}</h3>
+            <p>Approved Providers</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card primary">
+            <div class="stat-icon"><i class="bi bi-calendar-check"></i></div>
+            <h3>{{ stats.total_bookings }}</h3>
+            <p>Total Bookings</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card info">
+            <div class="stat-icon"><i class="bi bi-grid"></i></div>
+            <h3>{{ stats.total_categories }}</h3>
+            <p>Service Categories</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card success">
+            <div class="stat-icon"><i class="bi bi-star"></i></div>
+            <h3>{{ stats.total_reviews }}</h3>
+            <p>Total Reviews</p>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="content-card">
+            <h5 class="mb-3"><i class="bi bi-clock-history"></i> Pending Provider Approvals</h5>
+            {% if recent_providers %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Provider</th>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for provider in recent_providers %}
+                            <tr>
+                                <td>{{ provider.user.username }}</td>
+                                <td>{{ provider.name|default:"N/A" }}</td>
+                                <td><span class="badge bg-warning">Pending</span></td>
+                                <td><a href="{% url 'custom_admin:provider_detail' provider.id %}" class="btn btn-sm btn-primary">Review</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <a href="{% url 'custom_admin:providers_list' %}?status=pending" class="btn btn-primary mt-2">View All Pending</a>
+            {% else %}
+                <p class="text-muted">No pending provider approvals</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="content-card">
+            <h5 class="mb-3"><i class="bi bi-calendar-event"></i> Recent Bookings</h5>
+            {% if recent_bookings %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Customer</th>
+                                <th>Provider</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for booking in recent_bookings %}
+                            <tr>
+                                <td>#{{ booking.id }}</td>
+                                <td>{{ booking.customer.username }}</td>
+                                <td>{{ booking.provider.name|default:"N/A" }}</td>
+                                <td><span class="badge bg-info">{{ booking.get_status_display }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted">No recent bookings</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,6 +1,6 @@
-# Suvidha Connect Backend
+# Sahayak Backend
 
-Django REST API backend for Suvidha Connect Flutter application.
+Django REST API backend for Sahayak Flutter application.
 
 ## Setup
 

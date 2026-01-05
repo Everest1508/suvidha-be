@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'bookings',
     'addresses',
     'landing',
+    'custom_admin',
 ]
 
 MIDDLEWARE = [
@@ -159,6 +160,9 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# App Base URL (for legal pages links in admin)
+APP_BASE_URL = 'https://suvidhaconnect.pythonanywhere.com'  # Change to your production URL
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [

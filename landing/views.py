@@ -59,3 +59,18 @@ def contact_form_submit(request):
             'success': False,
             'error': 'An error occurred. Please try again later.'
         }, status=500)
+
+
+def terms_conditions(request):
+    """Terms and Conditions page"""
+    return render(request, 'landing/terms_conditions.html')
+
+
+def privacy_policy(request):
+    """Privacy Policy page"""
+    return render(request, 'landing/privacy_policy.html')
+
+
+def about_us(request):
+    """About Us page"""
+    return render(request, 'landing/about_us.html')

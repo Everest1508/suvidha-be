@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: linear-gradient(135deg, #E8F4F8 0%, #F5E8F0 100%);
+    background: linear-gradient(135deg, #E3F2FD 0%, #E0F2F1 100%);
     min-height: 100vh;
     color: #1A1D21;
 }
@@ -243,7 +243,7 @@ body {
 .shape-4 {
     width: 90px;
     height: 90px;
-    background: linear-gradient(135deg, #26A69A 0%, #00897B 100%);
+    background: linear-gradient(135deg, #26A69A 0%, #2196F3 100%);
     bottom: 160px;
     right: 80px;
     animation-delay: 1.5s;
@@ -293,7 +293,7 @@ body {
 .phone-screen {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    background: linear-gradient(135deg, #26A69A 0%, #2196F3 100%);
     border-radius: 24px;
     display: flex;
     align-items: center;
@@ -303,7 +303,7 @@ body {
 .phone-logo {
     font-size: 32px;
     font-weight: 800;
-    color: #1A1D21;
+    color: white;
     letter-spacing: -1px;
 }
 
@@ -404,7 +404,80 @@ body {
     max-width: 1200px;
     margin: 0 auto;
     padding: 100px 24px;
-    background: linear-gradient(135deg, #E8F4F8 0%, #F5E8F0 100%);
+    background: linear-gradient(135deg, #E3F2FD 0%, #E0F2F1 100%);
+}
+
+/* Footer */
+.footer {
+    background: #1A1F2E;
+    color: #FAFAFA;
+    padding: 60px 24px 24px;
+    margin-top: 0;
+}
+
+.footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.footer-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 40px;
+    margin-bottom: 40px;
+}
+
+.footer-section h3 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: #2196F3;
+}
+
+.footer-section h4 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #FAFAFA;
+}
+
+.footer-section p {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #9CA3AF;
+}
+
+.footer-links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.footer-links li {
+    margin-bottom: 12px;
+}
+
+.footer-links a {
+    color: #9CA3AF;
+    text-decoration: none;
+    font-size: 15px;
+    transition: color 0.2s;
+}
+
+.footer-links a:hover {
+    color: #2196F3;
+}
+
+.footer-bottom {
+    border-top: 1px solid #2D3748;
+    padding-top: 24px;
+    text-align: center;
+}
+
+.footer-bottom p {
+    color: #6B7280;
+    font-size: 14px;
+    margin: 0;
 }
 
 .contact-container {
@@ -513,6 +586,11 @@ body {
     .contact-content {
         grid-template-columns: 1fr;
         gap: 40px;
+    }
+
+    .footer-content {
+        grid-template-columns: 1fr;
+        gap: 32px;
     }
 }
 

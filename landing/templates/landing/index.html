@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suvidha Connect - Connect with Service Providers</title>
+    <title>Sahayak - Connect with Service Providers</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'landing/css/style.css' %}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,12 +15,17 @@
     <header class="header">
         <nav class="navbar">
             <div class="nav-container">
-                <div class="logo">Suvidha Connect</div>
+                <div class="logo">Sahayak</div>
                 <ul class="nav-links">
                     <li><a href="#home" class="active">Home</a></li>
                     <li><a href="#about">About us</a></li>
                     <li><a href="#contact">Contact</a></li>
                 </ul>
+                <div class="nav-actions">
+                    <a href="/terms-conditions" class="login-link">Terms</a>
+                    <a href="/privacy-policy" class="login-link">Privacy</a>
+                    <a href="/custom-admin/login/" class="signup-btn">Admin Login</a>
+                </div>
             </div>
         </nav>
     </header>
@@ -69,7 +74,7 @@
             <div class="about-content">
                 <div class="about-text">
                     <p class="about-description">
-                        Suvidha Connect is a revolutionary platform that connects customers with trusted service providers 
+                        Sahayak is a revolutionary platform that connects customers with trusted service providers 
                         in their local area. We make it easy to find, book, and manage services for all your home and 
                         business needs.
                     </p>
@@ -142,6 +147,44 @@
             </div>
         </div>
     </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Sahayak</h3>
+                    <p>Connecting customers with trusted service providers in your local area.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul class="footer-links">
+                        <li><a href="#home">Home</a></li>
+                        <li><a href="#about">About Us</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul class="footer-links">
+                        <li><a href="/terms-conditions">Terms & Conditions</a></li>
+                        <li><a href="/privacy-policy">Privacy Policy</a></li>
+                        <li><a href="/about-us">About Us</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <ul class="footer-links">
+                        <li>Email: support@suvidhaconnect.com</li>
+                        <li>Phone: +91-XXXXX-XXXXX</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Sahayak. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
 
     <script>
         // Handle contact form submission

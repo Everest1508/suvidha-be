@@ -37,18 +37,25 @@ class SavedAddressAdmin(admin.ModelAdmin):
     actions = ['set_as_default', 'remove_default']
     
     def is_default_display(self, obj):
-        if obj.is_default:
+        if obj and obj.is_default:
             return format_html('<span style="color: green; font-weight: bold;">✓ Default</span>')
         return '-'
     is_default_display.short_description = 'Default'
     
     def full_address_preview(self, obj):
-        return obj.get_full_address()
+        if obj:
+            return obj.get_full_address() or '-'
+        return '-'
     full_address_preview.short_description = 'Full Address'
     
     def full_address_display(self, obj):
-        return format_html('<p style="font-size: 14px; padding: 10px; background: #f5f5f5; border-radius: 4px;">{}</p>', 
-                          obj.get_full_address())
+        if obj:
+            full_address = obj.get_full_address() or 'No address provided'
+            return format_html(
+                '<p style="font-size: 14px; padding: 10px; background: #f5f5f5; border-radius: 4px;">{}</p>',
+                full_address
+            )
+        return format_html('<p style="font-size: 14px; padding: 10px; background: #f5f5f5; border-radius: 4px;">-</p>')
     full_address_display.short_description = 'Full Address'
     
     def set_as_default(self, request, queryset):

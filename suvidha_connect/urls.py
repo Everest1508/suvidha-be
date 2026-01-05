@@ -18,14 +18,17 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from . import admin_views
 
 # Customize admin site
-admin.site.site_header = "Suvidha Connect Admin Panel"
-admin.site.site_title = "Suvidha Connect Admin"
-admin.site.index_title = "Welcome to Suvidha Connect Administration"
+admin.site.site_header = "Sahayak Admin Panel"
+admin.site.site_title = "Sahayak Admin"
+admin.site.index_title = "Welcome to Sahayak Administration"
 
 urlpatterns = [
+    path('admin/about/', admin_views.admin_about_view, name='admin_about'),
     path('admin/', admin.site.urls),
+    path('custom-admin/', include('custom_admin.urls')),
     path('', include('landing.urls')),
     path('api/auth/', include('accounts.urls')),
     path('api/wallets/', include('accounts.wallet_urls')),  # Wallet endpoints

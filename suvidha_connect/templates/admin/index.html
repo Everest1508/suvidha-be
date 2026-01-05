@@ -1,0 +1,91 @@
+{% extends "admin/index.html" %}
+{% load static %}
+
+{% block content %}
+{{ block.super }}
+
+<div class="module" style="margin-top: 20px;">
+    <h2>Legal Pages & App Links</h2>
+    <div style="padding: 15px; background: #f8f9fa; border-radius: 5px;">
+        <h3 style="margin-top: 0;">Flutter App Legal Pages</h3>
+        <p>Use these links in your app or share with users:</p>
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 10px;">
+                <strong>Terms & Conditions:</strong><br>
+                <code style="background: white; padding: 5px 10px; border-radius: 3px; display: inline-block; margin-top: 5px;">
+                    {{ request.scheme }}://{{ request.get_host }}/terms-conditions
+                </code>
+                <a href="{{ request.scheme }}://{{ request.get_host }}/terms-conditions" target="_blank" style="margin-left: 10px; text-decoration: none;">
+                    <span style="background: #417690; color: white; padding: 5px 10px; border-radius: 3px;">Open ↗</span>
+                </a>
+            </li>
+            <li style="margin-bottom: 10px;">
+                <strong>Privacy Policy:</strong><br>
+                <code style="background: white; padding: 5px 10px; border-radius: 3px; display: inline-block; margin-top: 5px;">
+                    {{ request.scheme }}://{{ request.get_host }}/privacy-policy
+                </code>
+                <a href="{{ request.scheme }}://{{ request.get_host }}/privacy-policy" target="_blank" style="margin-left: 10px; text-decoration: none;">
+                    <span style="background: #417690; color: white; padding: 5px 10px; border-radius: 3px;">Open ↗</span>
+                </a>
+            </li>
+            <li style="margin-bottom: 10px;">
+                <strong>About Us:</strong><br>
+                <code style="background: white; padding: 5px 10px; border-radius: 3px; display: inline-block; margin-top: 5px;">
+                    {{ request.scheme }}://{{ request.get_host }}/about-us
+                </code>
+                <a href="{{ request.scheme }}://{{ request.get_host }}/about-us" target="_blank" style="margin-left: 10px; text-decoration: none;">
+                    <span style="background: #417690; color: white; padding: 5px 10px; border-radius: 3px;">Open ↗</span>
+                </a>
+            </li>
+        </ul>
+        
+        <h3 style="margin-top: 20px;">Quick Links</h3>
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 10px;">
+                <strong>Sahayak Admin Panel:</strong><br>
+                <code style="background: white; padding: 5px 10px; border-radius: 3px; display: inline-block; margin-top: 5px;">
+                    {{ request.scheme }}://{{ request.get_host }}/custom-admin/
+                </code>
+                <a href="/custom-admin/" target="_blank" style="margin-left: 10px; text-decoration: none;">
+                    <span style="background: #417690; color: white; padding: 5px 10px; border-radius: 3px;">Open ↗</span>
+                </a>
+            </li>
+            <li style="margin-bottom: 10px;">
+                <strong>Sahayak Admin Login:</strong><br>
+                <code style="background: white; padding: 5px 10px; border-radius: 3px; display: inline-block; margin-top: 5px;">
+                    {{ request.scheme }}://{{ request.get_host }}/admin/login/?next=/custom-admin/
+                </code>
+                <a href="/admin/login/?next=/custom-admin/" target="_blank" style="margin-left: 10px; text-decoration: none;">
+                    <span style="background: #417690; color: white; padding: 5px 10px; border-radius: 3px;">Login ↗</span>
+                </a>
+                <small style="display: block; color: #6b7280; margin-top: 5px;">(Uses Django admin login - redirects to Sahayak Admin after login)</small>
+            </li>
+            <li style="margin-bottom: 10px;">
+                <a href="/admin/about/" style="text-decoration: none; color: #417690; font-weight: 600;">
+                    → About Admin Panel
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<style>
+    .module h2 {
+        background: #417690;
+        color: white;
+        padding: 10px 15px;
+        margin: 0 0 15px 0;
+        border-radius: 3px;
+    }
+    .module h3 {
+        color: #417690;
+        border-bottom: 2px solid #417690;
+        padding-bottom: 5px;
+    }
+    code {
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+    }
+</style>
+{% endblock %}
+

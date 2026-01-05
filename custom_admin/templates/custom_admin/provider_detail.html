@@ -1,0 +1,97 @@
+{% extends "custom_admin/base.html" %}
+
+{% block title %}Provider Details{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Provider Details</h1>
+    <a href="{% url 'custom_admin:providers_list' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to List
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="content-card">
+            <h5 class="mb-3">Provider Information</h5>
+            <table class="table">
+                <tr>
+                    <th width="200">Username:</th>
+                    <td>{{ provider.user.username }}</td>
+                </tr>
+                <tr>
+                    <th>Email:</th>
+                    <td>{{ provider.user.email }}</td>
+                </tr>
+                <tr>
+                    <th>Name:</th>
+                    <td>{{ provider.name|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                    <th>Contact:</th>
+                    <td>{{ provider.contact|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                    <th>Location:</th>
+                    <td>{{ provider.location_string|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                    <th>Address:</th>
+                    <td>{{ provider.address|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                    <th>Status:</th>
+                    <td>
+                        {% if provider.verification_status == 'approved' %}
+                            <span class="badge bg-success">Approved</span>
+                        {% elif provider.verification_status == 'rejected' %}
+                            <span class="badge bg-danger">Rejected</span>
+                        {% else %}
+                            <span class="badge bg-warning">Pending</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% if provider.verification_notes %}
+                <tr>
+                    <th>Notes:</th>
+                    <td>{{ provider.verification_notes }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+        
+        {% if provider.pan_card or provider.registration_certificate %}
+        <div class="content-card">
+            <h5 class="mb-3">Documents</h5>
+            {% if provider.pan_card %}
+                <p><strong>PAN Card:</strong> <a href="{{ provider.pan_card.url }}" target="_blank" class="btn btn-sm btn-outline-primary">View</a></p>
+            {% endif %}
+            {% if provider.registration_certificate %}
+                <p><strong>Registration Certificate:</strong> <a href="{{ provider.registration_certificate.url }}" target="_blank" class="btn btn-sm btn-outline-primary">View</a></p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-4">
+        <div class="content-card">
+            <h5 class="mb-3">Approve/Reject Provider</h5>
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="{{ form.verification_status.id_for_label }}" class="form-label">Action</label>
+                    {{ form.verification_status }}
+                </div>
+                <div class="mb-3">
+                    <label for="{{ form.verification_notes.id_for_label }}" class="form-label">Notes (Optional)</label>
+                    {{ form.verification_notes }}
+                </div>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-check-circle"></i> Submit
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
