@@ -10,6 +10,7 @@ from django.utils.decorators import method_decorator
 from django.db.models import Q, F, DecimalField, Value, Case, When
 from django.db.models.functions import ACos, Cos, Radians, Sin
 from decimal import Decimal
+from urllib.parse import unquote_plus
 from .models import ServiceProvider, ProviderService, ReferralCode
 from .serializers import (
     ServiceProviderSerializer,
@@ -251,20 +252,81 @@ class ServiceProviderViewSet(viewsets.ModelViewSet):
             except ServiceCategory.DoesNotExist:
                 pass
         
-        # Search filter
+        # Fuzzy search: handle URL encoding, strip, split into words, match any word or substring in multiple fields
         search_query = request.query_params.get('search', None)
         if search_query:
-            queryset = queryset.filter(
-                Q(name__icontains=search_query) |
-                Q(address__icontains=search_query) |
-                Q(location_string__icontains=search_query)
-            )
+            # URL decode the search query (handles +, %20, etc.)
+            original_query = search_query
+            search_query = unquote_plus(search_query).strip()
+            
+            # Debug logging
+            print(f"🔍 Search query - Original: '{original_query}', Decoded: '{search_query}'")
+            
+            if search_query:
+                # Normalize: split into words (e.g. "cars " -> ["cars"], "car wash" -> ["car", "wash"])
+                words = [w.strip() for w in search_query.split() if w.strip()]
+                print(f"🔍 Search words: {words}")
+                
+                if words:
+                    # Build search conditions: match if ANY word (or fuzzy variant) appears in ANY of these fields
+                    search_conditions = Q()
+                    
+                    def _search_tokens_for_word(word):
+                        """Return list of strings to search: full word + typo + prefixes (min 4 chars) so 'painter' matches 'Paint' but not 'int' in 'Plumber'."""
+                        tokens = [word]
+                        # Typo: word minus last char (e.g. "painter" -> "painte")
+                        if len(word) > 1:
+                            short = word[:-1]
+                            if short not in tokens:
+                                tokens.append(short)
+                        # Prefixes of length >= 4 only (e.g. "painter" -> "pain", "paint", "painte") so "Paint" matches
+                        # Avoid short substrings like "int", "ain" that match unrelated words (Electronics, Plumber)
+                        if len(word) > 4:
+                            for length in range(4, len(word)):
+                                prefix = word[:length]
+                                if prefix not in tokens:
+                                    tokens.append(prefix)
+                        return tokens
+                    
+                    for word in words:
+                        tokens = _search_tokens_for_word(word)
+                        for token in tokens:
+                            if len(token) < 3:
+                                continue
+                            word_condition = (
+                                Q(name__icontains=token) |
+                                Q(address__icontains=token) |
+                                Q(location_string__icontains=token) |
+                                Q(contact__icontains=token) |
+                                Q(services__service_category__name__icontains=token)
+                            )
+                            search_conditions |= word_condition
+                    
+                    # Also try matching the entire search query as a phrase (for exact phrase matches)
+                    if len(words) > 1:
+                        full_query_condition = (
+                            Q(name__icontains=search_query) |
+                            Q(address__icontains=search_query) |
+                            Q(location_string__icontains=search_query) |
+                            Q(contact__icontains=search_query) |
+                            Q(services__service_category__name__icontains=search_query)
+                        )
+                        search_conditions |= full_query_condition
+                    
+                    queryset = queryset.filter(search_conditions).distinct()
+                    print(f"🔍 Found {queryset.count()} providers matching search (fuzzy)")
         
         # Location-based filtering (near me)
         latitude = request.query_params.get('latitude', None)
         longitude = request.query_params.get('longitude', None)
-        radius = float(request.query_params.get('radius', 10))  # Default 10km
-        
+        radius_param = request.query_params.get('radius', None)
+        try:
+            radius = float(radius_param) if (radius_param is not None and str(radius_param).strip() != '') else 10.0
+        except (ValueError, TypeError):
+            radius = 10.0
+        # Ensure radius is positive
+        radius = max(0.1, radius)
+
         if latitude and longitude:
             try:
                 lat = float(latitude)
@@ -283,9 +345,10 @@ class ServiceProviderViewSet(viewsets.ModelViewSet):
                     c = 2 * asin(sqrt(a))
                     return R * c
                 
-                # Filter providers that have valid coordinates
+                # Filter providers that have valid coordinates and are within radius
                 providers_with_location = []
-                for provider in queryset.filter(latitude__isnull=False, longitude__isnull=False):
+                qs_with_location = queryset.filter(latitude__isnull=False, longitude__isnull=False)
+                for provider in qs_with_location:
                     distance = haversine_distance(
                         lat, lon,
                         float(provider.latitude),
@@ -294,8 +357,10 @@ class ServiceProviderViewSet(viewsets.ModelViewSet):
                     if distance <= radius:
                         providers_with_location.append(provider.id)
                 
+                print(f"[DEBUG] Radius filter: radius={radius} km, request param='{radius_param}', within_radius={len(providers_with_location)} providers")
                 queryset = queryset.filter(id__in=providers_with_location)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                print(f"[DEBUG] Radius filter error (skipping location filter): {e}")
                 pass
         
         # Price range filtering
@@ -358,6 +423,33 @@ class ServiceProviderViewSet(viewsets.ModelViewSet):
         else:
             queryset = queryset.order_by('-created_at')
         
+        # Debug: list providers being returned with distance
+        from math import radians, cos, sin, asin, sqrt
+        def _haversine_km(lat1, lon1, lat2, lon2):
+            R = 6371
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+            c = 2 * asin(sqrt(a))
+            return round(R * c, 2)
+
+        provider_list = list(queryset)
+        user_lat = float(latitude) if latitude else None
+        user_lon = float(longitude) if longitude else None
+        total_distance_km = 0.0
+
+        print(f"[DEBUG] Providers list: total={len(provider_list)}")
+        print(f"[DEBUG] Query params: latitude={latitude}, longitude={longitude}, radius={radius}, service={service_id}, search={request.query_params.get('search')}")
+        for i, p in enumerate(provider_list):
+            dist_km = None
+            if user_lat is not None and user_lon is not None and p.latitude is not None and p.longitude is not None:
+                dist_km = _haversine_km(user_lat, user_lon, float(p.latitude), float(p.longitude))
+                total_distance_km += dist_km
+            dist_str = f" distance={dist_km} km" if dist_km is not None else " distance=N/A"
+            print(f"  [{i+1}] id={p.id} name={p.name} lat={p.latitude} lon={p.longitude}{dist_str}")
+        if user_lat is not None and user_lon is not None:
+            print(f"[DEBUG] Total distance (sum of all): {round(total_distance_km, 2)} km")
+
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     

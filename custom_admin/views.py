@@ -9,8 +9,9 @@ from providers.models import ServiceProvider
 from services.models import ServiceCategory
 from bookings.models import Booking
 from reviews.models import Review
-from .forms import ServiceCategoryForm, UserForm, ProviderApprovalForm
+from .forms import ServiceCategoryForm, UserForm, ProviderApprovalForm, EmailSettingsForm
 from .icon_list import ICONSAX_ICONS, get_icon_name
+from .models import EmailSettings
 
 
 def is_admin(user):
@@ -304,4 +305,25 @@ def category_delete(request, category_id):
         'category': category,
     }
     return render(request, 'custom_admin/category_delete.html', context)
+
+
+@login_required(login_url='custom_admin:login')
+@user_passes_test(is_admin, login_url='custom_admin:login')
+def email_settings(request):
+    """Configure SMTP email settings (used for password reset etc.)."""
+    instance = EmailSettings.objects.first()
+    if instance is None:
+        instance = EmailSettings.objects.create()
+    if request.method == 'POST':
+        form = EmailSettingsForm(request.POST, instance=instance)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Email settings saved. Password reset and other emails will use these settings when enabled.')
+            return redirect('custom_admin:email_settings')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = EmailSettingsForm(instance=instance)
+    context = {'form': form, 'email_settings': instance}
+    return render(request, 'custom_admin/email_settings.html', context)
 

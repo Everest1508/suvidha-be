@@ -1,0 +1,89 @@
+{% extends "custom_admin/base.html" %}
+
+{% block title %}Email Settings{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-envelope-at"></i> Email Settings</h1>
+</div>
+
+<p class="text-muted mb-4">
+    Configure SMTP to send emails from the app (e.g. password reset codes). Leave "Enable email" unchecked to use console backend (codes printed in server log).
+    <strong>You must enter the SMTP password when enabling email</strong> (for Gmail, use an <a href="https://support.google.com/accounts/answer/185833" target="_blank">App Password</a>).
+</p>
+
+<div class="content-card">
+    <form method="post">
+        {% csrf_token %}
+        
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="{{ form.smtp_host.id_for_label }}" class="form-label">SMTP Host</label>
+                {{ form.smtp_host }}
+                {% if form.smtp_host.help_text %}
+                <div class="form-text">{{ form.smtp_host.help_text }}</div>
+                {% endif %}
+            </div>
+            <div class="col-md-3 mb-3">
+                <label for="{{ form.smtp_port.id_for_label }}" class="form-label">Port</label>
+                {{ form.smtp_port }}
+                {% if form.smtp_port.help_text %}
+                <div class="form-text">{{ form.smtp_port.help_text }}</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="{{ form.smtp_username.id_for_label }}" class="form-label">SMTP Username / Email</label>
+                {{ form.smtp_username }}
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="{{ form.smtp_password.id_for_label }}" class="form-label">SMTP Password</label>
+                {{ form.smtp_password }}
+                {% if form.smtp_password.help_text %}
+                <div class="form-text">{{ form.smtp_password.help_text }}</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="mb-3">
+            <label for="{{ form.from_email.id_for_label }}" class="form-label">From Email</label>
+            {{ form.from_email }}
+            {% if form.from_email.help_text %}
+            <div class="form-text">{{ form.from_email.help_text }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="mb-3 form-check">
+            {{ form.use_tls }}
+            <label class="form-check-label" for="{{ form.use_tls.id_for_label }}">
+                Use TLS (recommended for port 587)
+            </label>
+        </div>
+        
+        <div class="mb-4 form-check">
+            {{ form.is_active }}
+            <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                <strong>Enable email</strong> – Use these settings to send password reset and other emails
+            </label>
+        </div>
+        
+        {% if form.errors %}
+        <div class="alert alert-danger">
+            <strong>Please correct the errors below:</strong>
+            {{ form.non_field_errors }}
+            {% for field in form %}
+                {% for error in field.errors %}
+                <div>{{ field.label }}: {{ error }}</div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-circle"></i> Save Email Settings
+        </button>
+    </form>
+</div>
+{% endblock %}

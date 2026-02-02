@@ -15,5 +15,6 @@ urlpatterns = [
     path('categories/add/', views.category_add, name='category_add'),
     path('categories/<int:category_id>/edit/', views.category_edit, name='category_edit'),
     path('categories/<int:category_id>/delete/', views.category_delete, name='category_delete'),
+    path('email-settings/', views.email_settings, name='email_settings'),
 ]
 

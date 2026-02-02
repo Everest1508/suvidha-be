@@ -170,7 +170,7 @@ class BookingViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
-        """Mark booking as completed (provider only)."""
+        """Mark booking as completed and automatically deduct payment from customer wallet (provider only)."""
         booking = self.get_object()
         
         if request.user.role != 'provider':
@@ -185,9 +185,64 @@ class BookingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        booking.status = 'payment'
-        booking.completed_at = timezone.now()
-        booking.save()
+        # Check if price is set
+        if not booking.price:
+            return Response(
+                {'error': 'Booking price is not set. Cannot complete booking.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Automatically deduct money from customer wallet and add to provider wallet
+        try:
+            from accounts.models import Wallet, WalletTransaction
+            from django.db import transaction as db_transaction
+            from decimal import Decimal
+            
+            with db_transaction.atomic():
+                # Get or create wallets
+                customer_wallet, _ = Wallet.objects.get_or_create(user=booking.customer)
+                provider_wallet, _ = Wallet.objects.get_or_create(user=booking.provider.user)
+                
+                # Check if customer has sufficient balance
+                if customer_wallet.balance < booking.price:
+                    return Response(
+                        {'error': f'Customer has insufficient wallet balance. Balance: Rs. {customer_wallet.balance}/-, Required: Rs. {booking.price}/-'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Deduct from customer wallet
+                customer_wallet.deduct_money(booking.price)
+                WalletTransaction.objects.create(
+                    wallet=customer_wallet,
+                    transaction_type='payment',
+                    amount=booking.price,
+                    description=f'Payment for completed booking #{booking.id}',
+                    related_booking=booking
+                )
+                
+                # Add to provider wallet
+                provider_wallet.add_money(booking.price)
+                WalletTransaction.objects.create(
+                    wallet=provider_wallet,
+                    transaction_type='received',
+                    amount=booking.price,
+                    description=f'Payment received for completed booking #{booking.id}',
+                    related_booking=booking
+                )
+                
+                # Update booking status
+                booking.status = 'payment'
+                booking.completed_at = timezone.now()
+                booking.save()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to process payment for booking {booking.id}: {str(e)}")
+            print(f"❌ Failed to process payment for booking {booking.id}: {str(e)}")
+            return Response(
+                {'error': f'Failed to process payment: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         # Create notification for customer about booking completion
         try:
@@ -196,7 +251,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             notification = Notification.objects.create(
                 user=booking.customer,
                 title='Service Completed',
-                message=f'Your {service_name} service has been completed by {provider_name}. Please leave a review!',
+                message=f'Your {service_name} service has been completed by {provider_name}. Payment of Rs. {booking.price}/- has been deducted from your wallet. Please leave a review!',
                 notification_type='booking_completed',
                 related_id=booking.id
             )
@@ -207,6 +262,21 @@ class BookingViewSet(viewsets.ModelViewSet):
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to create notification for booking completion {booking.id}: {str(e)}")
             print(f"❌ Failed to create notification for booking completion {booking.id}: {str(e)}")
+        
+        # Create notification for provider about payment received
+        try:
+            service_name = booking.service_category.name if booking.service_category else 'Service'
+            customer_name = booking.customer.get_full_name() or booking.customer.username
+            notification = Notification.objects.create(
+                user=booking.provider.user,
+                title='Payment Received',
+                message=f'You have received Rs. {booking.price}/- from {customer_name} for {service_name}.',
+                notification_type='payment_received',
+                related_id=booking.id
+            )
+            print(f"✅ Created notification {notification.id} for provider {booking.provider.user.username} about payment {booking.id}")
+        except Exception as e:
+            print(f"❌ Failed to create payment notification: {str(e)}")
         
         serializer = self.get_serializer(booking)
         return Response(serializer.data)
@@ -399,10 +469,10 @@ class BookingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Can cancel in negotiation or accepted states
-        if booking.status not in ['negotiation', 'accepted', 'in_progress']:
+        # Can cancel in pending, negotiation, accepted, in_progress, or payment states
+        if booking.status not in ['pending', 'negotiation', 'accepted', 'in_progress', 'payment']:
             return Response(
-                {'error': f'Can only cancel bookings in negotiation, accepted, or in_progress states. Current status: {booking.get_status_display()}'},
+                {'error': f'Can only cancel bookings in pending, negotiation, accepted, in_progress, or payment states. Current status: {booking.get_status_display()}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -530,7 +600,7 @@ class BookingViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def my_requests(self, request):
-        """Get requests for current provider (accepted and pending)."""
+        """Get requests for current provider (pending, negotiation, accepted, and in_progress)."""
         if request.user.role != 'provider':
             return Response(
                 {'error': 'Only providers can access this endpoint'},
@@ -542,7 +612,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             provider = ServiceProvider.objects.get(user=request.user)
             bookings = Booking.objects.filter(
                 provider=provider,
-                status__in=['pending', 'accepted', 'in_progress']
+                status__in=['pending', 'negotiation', 'accepted', 'in_progress']
             ).order_by('-created_at')
             
             serializer = self.get_serializer(bookings, many=True)

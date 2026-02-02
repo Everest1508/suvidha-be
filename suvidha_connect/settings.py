@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -225,3 +226,11 @@ FCM_PROJECT_ID = 'suvidha-2fb5d'
 # Example: BASE_DIR / 'firebase-service-account.json'
 # Or use absolute path: '/path/to/your/firebase-service-account.json'
 FCM_SERVICE_ACCOUNT_JSON_PATH = BASE_DIR / 'firebase-service-account.json'
+
+# Email (for password reset code)
+# Development: codes printed to console. Production: set EMAIL_BACKEND to SMTP.
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend'
+)
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@suvidha.com')

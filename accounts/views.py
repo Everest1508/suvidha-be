@@ -8,6 +8,10 @@ from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.db import transaction
 from django.contrib.auth import authenticate, login
+from django.core.cache import cache
+from django.core.mail import send_mail, get_connection
+import random
+import string
 from decimal import Decimal
 from .models import User, Wallet, WalletTransaction, BankAccount, Withdrawal
 from .serializers import (
@@ -105,7 +109,115 @@ class UserViewSet(viewsets.ModelViewSet):
             {'error': 'Invalid credentials. Please check your username/email and password.'},
             status=status.HTTP_401_UNAUTHORIZED
         )
-    
+
+    @action(detail=False, methods=['post'], permission_classes=[])
+    def forgot_password(self, request):
+        """Send a 6-digit reset code to the user's email. No auth required."""
+        email = (request.data.get('email') or '').strip().lower()
+        if not email:
+            return Response(
+                {'error': 'Email is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # Don't reveal whether email exists
+            return Response(
+                {'success': True, 'message': 'If an account exists with this email, you will receive a code shortly.'},
+                status=status.HTTP_200_OK
+            )
+        code = ''.join(random.choices(string.digits, k=6))
+        cache_key = f'pw_reset:{email}'
+        cache.set(cache_key, code, timeout=900)  # 15 minutes
+        try:
+            connection = None
+            from_email = None
+            try:
+                from custom_admin.models import EmailSettings
+                settings_obj = EmailSettings.objects.first()
+                if settings_obj and settings_obj.is_configured():
+                    connection = get_connection(
+                        backend='django.core.mail.backends.smtp.EmailBackend',
+                        host=settings_obj.smtp_host,
+                        port=settings_obj.smtp_port,
+                        username=settings_obj.smtp_username,
+                        password=settings_obj.smtp_password,
+                        use_tls=settings_obj.use_tls,
+                        fail_silently=False,
+                    )
+                    from_email = settings_obj.from_email or settings_obj.smtp_username
+                    print(f"📧 Sending password reset email via Custom Admin SMTP ({settings_obj.smtp_host})")
+                else:
+                    print("📧 Email Settings not configured or disabled – using default backend (email may only appear in console)")
+            except Exception as e:
+                print(f"📧 EmailSettings not available, using default backend: {e}")
+            send_mail(
+                subject='Your password reset code - Suvidha Connect',
+                message=f'Your password reset code is: {code}\n\nThis code expires in 15 minutes.\n\nIf you did not request this, please ignore this email.',
+                from_email=from_email,
+                recipient_list=[email],
+                fail_silently=False,
+                connection=connection,
+            )
+        except Exception as e:
+            print(f"❌ Failed to send password reset email: {e}")
+            cache.delete(cache_key)
+            return Response(
+                {'error': 'Failed to send email. Please try again later.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        return Response(
+            {'success': True, 'message': 'If an account exists with this email, you will receive a code shortly.'},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=['post'], permission_classes=[])
+    def reset_password(self, request):
+        """Verify code and set new password. No auth required."""
+        email = (request.data.get('email') or '').strip().lower()
+        code = (request.data.get('code') or '').strip()
+        new_password = request.data.get('new_password')
+        new_password_confirm = request.data.get('new_password_confirm')
+
+        if not email:
+            return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not code:
+            return Response({'error': 'Code is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not new_password:
+            return Response({'error': 'New password is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if new_password != new_password_confirm:
+            return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
+
+        cache_key = f'pw_reset:{email}'
+        stored_code = cache.get(cache_key)
+        if not stored_code or stored_code != code:
+            return Response(
+                {'error': 'Invalid or expired code. Please request a new code.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': 'Invalid or expired code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        try:
+            validate_password(new_password, user)
+        except ValidationError as e:
+            msg = e.messages[0] if e.messages else 'Invalid password.'
+            return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save()
+        cache.delete(cache_key)
+        return Response(
+            {'success': True, 'message': 'Password has been reset. You can now log in.'},
+            status=status.HTTP_200_OK
+        )
+
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def register_fcm_token(self, request):
         """Register or update FCM device token for push notifications."""
