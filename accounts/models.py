@@ -15,6 +15,7 @@ class User(AbstractUser):
     phone = models.CharField(max_length=15, unique=True, null=True, blank=True)
     profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
     fcm_token = models.TextField(null=True, blank=True, help_text="Firebase Cloud Messaging device token for push notifications")
+    is_email_verified = models.BooleanField(default=False, help_text="True after user verifies email with the code sent on signup.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

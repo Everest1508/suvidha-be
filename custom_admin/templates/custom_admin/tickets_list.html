@@ -1,0 +1,29 @@
+{% extends "custom_admin/base.html" %}
+
+{% block title %}Tickets{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Tickets</h1>
+
+<div class="content-card">
+    <p class="text-muted">Ticket management. Add a Ticket model and list tickets here.</p>
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Subject</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">No tickets yet.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

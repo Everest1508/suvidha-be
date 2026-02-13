@@ -199,6 +199,9 @@
             <li><a href="{% url 'custom_admin:categories_list' %}" class="{% if 'category' in request.resolver_match.url_name %}active{% endif %}">
                 <i class="bi bi-grid"></i> Service Categories
             </a></li>
+            <li><a href="{% url 'custom_admin:tickets_list' %}" class="{% if 'ticket' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-ticket-perforated"></i> Tickets
+            </a></li>
             <li><a href="{% url 'custom_admin:email_settings' %}" class="{% if request.resolver_match.url_name == 'email_settings' %}active{% endif %}">
                 <i class="bi bi-envelope-at"></i> Email Settings
             </a></li>

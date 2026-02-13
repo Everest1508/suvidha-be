@@ -7,13 +7,13 @@ from .models import User, BankAccount
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     list_display = [
-        'username', 'email', 'phone', 'role', 'is_staff', 
+        'username', 'email', 'phone', 'role', 'is_staff',
         'is_active', 'profile_photo_preview', 'date_joined'
     ]
     list_filter = ['role', 'is_staff', 'is_superuser', 'is_active', 'date_joined']
     search_fields = ['username', 'email', 'phone', 'first_name', 'last_name']
     readonly_fields = ['date_joined', 'last_login', 'profile_photo_preview']
-    
+
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal info', {'fields': ('first_name', 'last_name', 'email')}),
@@ -25,14 +25,14 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('role', 'phone', 'profile_photo', 'profile_photo_preview')
         }),
     )
-    
+
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
         ('Additional Info', {
             'fields': ('role', 'phone', 'first_name', 'last_name', 'email')
         }),
     )
-    
-    actions = ['make_provider', 'make_customer', 'deactivate_users', 'activate_users']
+
+    actions = ['make_provider', 'make_customer', 'deactivate_users', 'activate_users', 'delete_selected_users']
     
     def profile_photo_preview(self, obj):
         if obj and obj.profile_photo:
@@ -65,5 +65,22 @@ class UserAdmin(BaseUserAdmin):
         updated = queryset.update(is_active=True)
         self.message_user(request, f'{updated} user(s) activated.')
     activate_users.short_description = 'Activate selected users'
+
+    def delete_selected_users(self, request, queryset):
+        """Delete selected users. Provider profile and their service links are removed; service categories are NOT deleted."""
+        # Avoid deleting superusers or the current user
+        to_delete = queryset.exclude(pk=request.user.pk).exclude(is_superuser=True)
+        count = to_delete.count()
+        if count == 0:
+            self.message_user(request, 'No users deleted. Cannot delete yourself or superusers.', level=40)
+            return
+        skipped = queryset.count() - count
+        for user in to_delete:
+            user.delete()
+        msg = f'{count} user(s) deleted. Their provider profile and service offerings (if any) were removed. Service categories were not affected.'
+        if skipped:
+            msg += f' {skipped} skipped (yourself or superuser).'
+        self.message_user(request, msg)
+    delete_selected_users.short_description = 'Delete selected users (provider data removed; service categories kept)'
 
 admin.site.register(BankAccount)

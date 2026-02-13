@@ -48,7 +48,7 @@ class ServiceProviderAdmin(admin.ModelAdmin):
         }),
     )
     inlines = [ProviderServiceInline]
-    actions = ['approve_providers', 'reject_providers']
+    actions = ['approve_providers', 'reject_providers', 'delete_providers_only', 'delete_providers_and_users']
     
     def can_login_display(self, obj):
         if obj is None:
@@ -109,7 +109,33 @@ class ServiceProviderAdmin(admin.ModelAdmin):
         updated = queryset.update(verification_status='rejected')
         self.message_user(request, f'{updated} provider(s) rejected.')
     reject_providers.short_description = 'Reject selected providers'
-    
+
+    def delete_providers_only(self, request, queryset):
+        """Delete selected provider profiles only. User accounts are kept. Service categories are NOT deleted."""
+        count = queryset.count()
+        for provider in queryset:
+            provider.delete()
+        self.message_user(
+            request,
+            f'{count} provider profile(s) deleted. User accounts were kept. '
+            'Their service offerings were removed. Service categories were not affected.'
+        )
+    delete_providers_only.short_description = 'Delete selected providers only (keep user accounts)'
+
+    def delete_providers_and_users(self, request, queryset):
+        """Delete selected providers and their user accounts. Service categories are NOT deleted."""
+        users_to_delete = []
+        for provider in queryset:
+            users_to_delete.append(provider.user)
+            provider.delete()
+        for u in users_to_delete:
+            u.delete()
+        self.message_user(
+            request,
+            f'{len(users_to_delete)} provider(s) and their user account(s) deleted. Service categories were not affected.'
+        )
+    delete_providers_and_users.short_description = 'Delete selected providers and their user accounts'
+
     def save_model(self, request, obj, form, change):
         if change and 'verification_status' in form.changed_data:
             if obj.verification_status == 'approved' and not obj.verified_by:

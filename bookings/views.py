@@ -126,6 +126,48 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
     
     @action(detail=True, methods=['post'])
+    def arrived_at_location(self, request, pk=None):
+        """Provider marks that they have arrived at the service location. Sends push notification to customer."""
+        booking = self.get_object()
+        
+        if request.user.role != 'provider':
+            return Response(
+                {'error': 'Only providers can mark arrived at location'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if booking.status not in ['accepted', 'in_progress']:
+            return Response(
+                {'error': f'Cannot mark arrived for booking with status {booking.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            provider_name = booking.provider.name or booking.provider.user.get_full_name() or booking.provider.user.username
+            service_name = booking.service_category.name if booking.service_category else 'Service'
+            notification = Notification.objects.create(
+                user=booking.customer,
+                title='Provider arrived',
+                message=f'{provider_name} has arrived at your location for {service_name}.',
+                notification_type='general',
+                related_id=booking.id
+            )
+            print(f"✅ Created notification {notification.id} for customer {booking.customer.username} (provider arrived) for booking {booking.id}")
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to create 'arrived' notification for booking {booking.id}: {str(e)}")
+            return Response(
+                {'error': 'Failed to send notification to customer'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        return Response(
+            {'message': 'Customer has been notified that you arrived.', 'booking': self.get_serializer(booking).data},
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
         """Accept a booking request (provider only)."""
         booking = self.get_object()
@@ -172,43 +214,48 @@ class BookingViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark booking as completed and automatically deduct payment from customer wallet (provider only)."""
         booking = self.get_object()
-        
+        booking_id = booking.id
+
+        def log_response(code, data):
+            print(f"📤 POST /api/bookings/{booking_id}/complete/ response {code}: {data}")
+
         if request.user.role != 'provider':
-            return Response(
-                {'error': 'Only providers can complete bookings'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
+            data = {'error': 'Only providers can complete bookings'}
+            log_response(403, data)
+            return Response(data, status=status.HTTP_403_FORBIDDEN)
+
         if booking.status not in ['accepted', 'in_progress']:
-            return Response(
-                {'error': f'Cannot complete booking with status {booking.status}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            data = {'error': f'Cannot complete booking with status {booking.status}'}
+            log_response(400, data)
+            return Response(data, status=status.HTTP_400_BAD_REQUEST)
+
         # Check if price is set
         if not booking.price:
-            return Response(
-                {'error': 'Booking price is not set. Cannot complete booking.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            data = {'error': 'Booking price is not set. Cannot complete booking.'}
+            log_response(400, data)
+            return Response(data, status=status.HTTP_400_BAD_REQUEST)
+
         # Automatically deduct money from customer wallet and add to provider wallet
         try:
             from accounts.models import Wallet, WalletTransaction
             from django.db import transaction as db_transaction
             from decimal import Decimal
-            
+
             with db_transaction.atomic():
                 # Get or create wallets
                 customer_wallet, _ = Wallet.objects.get_or_create(user=booking.customer)
                 provider_wallet, _ = Wallet.objects.get_or_create(user=booking.provider.user)
-                
+
                 # Check if customer has sufficient balance
                 if customer_wallet.balance < booking.price:
-                    return Response(
-                        {'error': f'Customer has insufficient wallet balance. Balance: Rs. {customer_wallet.balance}/-, Required: Rs. {booking.price}/-'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                    data = {
+                        'error': (
+                            f'Customer has insufficient wallet balance. '
+                            f'Balance: Rs. {customer_wallet.balance}/-, Required: Rs. {booking.price}/-'
+                        )
+                    }
+                    log_response(400, data)
+                    return Response(data, status=status.HTTP_400_BAD_REQUEST)
                 
                 # Deduct from customer wallet
                 customer_wallet.deduct_money(booking.price)
@@ -230,8 +277,8 @@ class BookingViewSet(viewsets.ModelViewSet):
                     related_booking=booking
                 )
                 
-                # Update booking status
-                booking.status = 'payment'
+                # Update booking status to completed (money already deducted; no separate payment step)
+                booking.status = 'completed'
                 booking.completed_at = timezone.now()
                 booking.save()
         except Exception as e:
@@ -239,11 +286,10 @@ class BookingViewSet(viewsets.ModelViewSet):
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to process payment for booking {booking.id}: {str(e)}")
             print(f"❌ Failed to process payment for booking {booking.id}: {str(e)}")
-            return Response(
-                {'error': f'Failed to process payment: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-        
+            data = {'error': f'Failed to process payment: {str(e)}'}
+            log_response(500, data)
+            return Response(data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         # Create notification for customer about booking completion
         try:
             service_name = booking.service_category.name if booking.service_category else 'Service'
@@ -277,9 +323,11 @@ class BookingViewSet(viewsets.ModelViewSet):
             print(f"✅ Created notification {notification.id} for provider {booking.provider.user.username} about payment {booking.id}")
         except Exception as e:
             print(f"❌ Failed to create payment notification: {str(e)}")
-        
+
         serializer = self.get_serializer(booking)
-        return Response(serializer.data)
+        response_data = serializer.data
+        log_response(200, response_data)
+        return Response(response_data)
     
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):

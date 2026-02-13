@@ -148,6 +148,28 @@ def user_edit(request, user_id):
 
 @login_required(login_url='custom_admin:login')
 @user_passes_test(is_admin, login_url='custom_admin:login')
+def user_delete(request, user_id):
+    """Delete user (with confirmation). Cannot delete self or superusers."""
+    user_to_delete = get_object_or_404(User, id=user_id)
+    if user_to_delete.pk == request.user.pk:
+        messages.error(request, 'You cannot delete your own account.')
+        return redirect('custom_admin:users_list')
+    if user_to_delete.is_superuser:
+        messages.error(request, 'Cannot delete a superuser account.')
+        return redirect('custom_admin:users_list')
+
+    if request.method == 'POST':
+        username = user_to_delete.username
+        user_to_delete.delete()
+        messages.success(request, f'User "{username}" has been deleted.')
+        return redirect('custom_admin:users_list')
+
+    context = {'user_to_delete': user_to_delete}
+    return render(request, 'custom_admin/user_delete.html', context)
+
+
+@login_required(login_url='custom_admin:login')
+@user_passes_test(is_admin, login_url='custom_admin:login')
 def providers_list(request):
     """List all providers with filtering"""
     status_filter = request.GET.get('status', '')
@@ -305,6 +327,13 @@ def category_delete(request, category_id):
         'category': category,
     }
     return render(request, 'custom_admin/category_delete.html', context)
+
+
+@login_required(login_url='custom_admin:login')
+@user_passes_test(is_admin, login_url='custom_admin:login')
+def tickets_list(request):
+    """Tickets list page (placeholder until Ticket model is added)."""
+    return render(request, 'custom_admin/tickets_list.html', {})
 
 
 @login_required(login_url='custom_admin:login')

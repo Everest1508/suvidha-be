@@ -4,7 +4,7 @@ from providers.models import ServiceProvider
 
 
 class Review(models.Model):
-    """Review model for service provider reviews"""
+    """Review model: one review per booking (booking-based). Same provider can be reviewed multiple times for different bookings."""
     provider = models.ForeignKey(
         ServiceProvider,
         on_delete=models.CASCADE,
@@ -24,24 +24,25 @@ class Review(models.Model):
         blank=True,
         related_name='reviews'
     )
+    # One review per completed booking; allows reviewing same provider again for different bookings
+    booking = models.ForeignKey(
+        'bookings.Booking',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='reviews'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         ordering = ['-created_at']
-        # Allow multiple reviews for different service categories from same provider
-        # Also allow reviewing same service multiple times if booked multiple times
         constraints = [
+            # One review per booking when booking is set
             models.UniqueConstraint(
-                fields=['provider', 'customer', 'service_category'],
-                name='unique_review_per_service',
-                condition=models.Q(service_category__isnull=False)
-            ),
-            # Allow one review per provider if service_category is null
-            models.UniqueConstraint(
-                fields=['provider', 'customer'],
-                name='unique_review_per_provider_no_service',
-                condition=models.Q(service_category__isnull=True)
+                fields=['booking'],
+                name='unique_review_per_booking',
+                condition=models.Q(booking__isnull=False)
             ),
         ]
     

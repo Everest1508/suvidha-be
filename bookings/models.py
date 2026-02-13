@@ -37,7 +37,15 @@ class Booking(models.Model):
         default='pending'
     )
     description = models.TextField(blank=True, help_text="Service description/requirements")
-    address = models.TextField(help_text="Service address")
+    saved_address = models.ForeignKey(
+        'addresses.SavedAddress',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='bookings',
+        help_text="Service address from user's saved addresses",
+    )
+    address = models.TextField(blank=True, default='', help_text="Denormalized address text (from saved_address or legacy)")
     scheduled_date = models.DateTimeField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     proposed_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Currently proposed price during negotiation")

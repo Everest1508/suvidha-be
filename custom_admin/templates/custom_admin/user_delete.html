@@ -1,0 +1,22 @@
+{% extends "custom_admin/base.html" %}
+
+{% block title %}Delete User{% endblock %}
+
+{% block content %}
+<div class="content-card">
+    <h3>Delete User</h3>
+    <p>Are you sure you want to delete the user <strong>"{{ user_to_delete.username }}"</strong>{% if user_to_delete.get_full_name %} ({{ user_to_delete.get_full_name }}){% endif %}?</p>
+    <p class="text-muted">{{ user_to_delete.email }} · {{ user_to_delete.role|title }}</p>
+    <p class="text-danger">This will also remove their provider profile and service links (if any). Service categories are not affected. This action cannot be undone.</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Yes, Delete User
+            </button>
+            <a href="{% url 'custom_admin:users_list' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

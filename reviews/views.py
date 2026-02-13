@@ -7,6 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from .models import Review
 from .serializers import ReviewSerializer
+from bookings.models import Booking
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -47,14 +48,46 @@ class ReviewViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def create_review(self, request):
-        """Create a new review."""
-        # Handle both JSON and form data
+        """Create a new review. Booking-based: pass booking_id to review a specific completed booking (one review per booking)."""
         if hasattr(request.data, 'copy'):
             data = request.data.copy()
         else:
             data = dict(request.data)
         
-        # Don't set customer in data, let serializer handle it
+        booking_id = data.pop('booking_id', None) or data.pop('booking_id_write', None)
+        if booking_id is not None:
+            try:
+                booking = Booking.objects.get(pk=booking_id)
+            except Booking.DoesNotExist:
+                return Response(
+                    {'error': 'Booking not found.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            if booking.customer_id != request.user.id:
+                return Response(
+                    {'error': 'You can only review your own bookings.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            if booking.status != 'completed':
+                return Response(
+                    {'error': 'You can only review completed bookings.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if Review.objects.filter(booking_id=booking_id).exists():
+                return Response(
+                    {'error': 'You have already reviewed this booking.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            data['booking'] = booking.pk
+            data['provider_id'] = booking.provider_id
+            data['service_category_id'] = booking.service_category_id
+        else:
+            if not data.get('provider_id'):
+                return Response(
+                    {'error': 'provider_id or booking_id is required.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
         serializer = self.get_serializer(data=data)
         if serializer.is_valid():
             review = serializer.save(customer=request.user)

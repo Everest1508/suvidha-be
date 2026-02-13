@@ -17,6 +17,8 @@ class SavedAddress(models.Model):
     postal_code = models.CharField(max_length=20)
     country = models.CharField(max_length=100, default='India')
     is_default = models.BooleanField(default=False, help_text="Default address for bookings")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, help_text="Latitude from map/location")
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, help_text="Longitude from map/location")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -62,6 +62,11 @@
                         <a href="{% url 'custom_admin:user_edit' user.id %}" class="btn btn-sm btn-primary">
                             <i class="bi bi-pencil"></i> Edit
                         </a>
+                        {% if user.id != request.user.id and not user.is_superuser %}
+                        <a href="{% url 'custom_admin:user_delete' user.id %}" class="btn btn-sm btn-danger">
+                            <i class="bi bi-trash"></i> Delete
+                        </a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}

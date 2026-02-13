@@ -21,6 +21,44 @@ from .serializers import (
 from providers.models import ServiceProvider
 
 
+def _send_verification_email(email, code):
+    """Send 6-digit verification code email. Uses same EmailSettings as forgot password. Returns True on success."""
+    print(code,"&"*12)
+    try:
+        connection = None
+        from_email = None
+        try:
+            from custom_admin.models import EmailSettings
+            settings_obj = EmailSettings.objects.first()
+            if settings_obj and settings_obj.is_configured():
+                connection = get_connection(
+                    backend='django.core.mail.backends.smtp.EmailBackend',
+                    host=settings_obj.smtp_host,
+                    port=settings_obj.smtp_port,
+                    username=settings_obj.smtp_username,
+                    password=settings_obj.smtp_password,
+                    use_tls=settings_obj.use_tls,
+                    fail_silently=False,
+                )
+                from_email = settings_obj.from_email or settings_obj.smtp_username
+            else:
+                print('📧 Email Settings not configured – verification code (console only):', code)
+        except Exception as e:
+            print(f"📧 EmailSettings not available: {e}")
+        send_mail(
+            subject='Verify your email - Suvidha Connect',
+            message=f'Your verification code is: {code}\n\nThis code expires in 15 minutes.\n\nIf you did not create an account, please ignore this email.',
+            from_email=from_email,
+            recipient_list=[email],
+            fail_silently=False,
+            connection=connection,
+        )
+        return True
+    except Exception as e:
+        print(f"❌ Failed to send verification email: {e}")
+        return False
+
+
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     """Custom authentication class that doesn't enforce CSRF for mobile apps."""
     def enforce_csrf(self, request):
@@ -43,66 +81,86 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], permission_classes=[])
     def register(self, request):
-        """Register a new user"""
+        """Register a new user. Sends verification code to email; user must verify before logging in."""
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+            email = (user.email or '').strip().lower()
+            code = ''.join(random.choices(string.digits, k=6))
+            cache_key = f'email_verify:{email}'
+            cache.set(cache_key, code, timeout=900)
+            _send_verification_email(email, code)
             return Response(
-                UserSerializer(user).data,
+                {
+                    **UserSerializer(user).data,
+                    'requires_email_verification': True,
+                    'email': email,
+                },
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['post'], permission_classes=[])
     def login(self, request):
-        """User login - accepts username or email"""
-        username_or_email = request.data.get('username') or request.data.get('email')
+        """User login - accepts username or email (email lookup is case-insensitive)."""
+        raw = request.data.get('username') or request.data.get('email')
+        username_or_email = (raw or '').strip()
         password = request.data.get('password')
-        
-        print(f"🔐 Login attempt - Username/Email: {username_or_email}")
+        if password is not None and isinstance(password, str):
+            password = password.strip()
+
+        print(f"🔐 Login attempt - Username/Email: {username_or_email!r}")
         print(f"🔐 Password length: {len(password) if password else 0}")
-        
+
         if not username_or_email or not password:
             return Response(
                 {'error': 'Username/email and password are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Try to authenticate with username first
-        user = authenticate(username=username_or_email, password=password)
+
+        # Try to authenticate with username first (exact match)
+        user = authenticate(request, username=username_or_email, password=password)
         print(f"🔐 Username authentication result: {user is not None}")
-        
-        # If that fails, try with email
-        if user is None:
+
+        # If that fails, try lookup by email (case-insensitive; providers often sign up with email only)
+        if user is None and '@' in username_or_email:
             try:
-                user_obj = User.objects.get(email=username_or_email)
+                user_obj = User.objects.get(email__iexact=username_or_email)
                 print(f"🔐 Found user by email: {user_obj.username}")
-                user = authenticate(username=user_obj.username, password=password)
+                user = authenticate(request, username=user_obj.username, password=password)
                 print(f"🔐 Email authentication result: {user is not None}")
             except User.DoesNotExist:
-                print(f"🔐 No user found with email: {username_or_email}")
+                print(f"🔐 No user found with email: {username_or_email!r}")
                 user = None
             except User.MultipleObjectsReturned:
-                print(f"🔐 Multiple users found with email: {username_or_email}")
-                user_obj = User.objects.filter(email=username_or_email).first()
+                user_obj = User.objects.filter(email__iexact=username_or_email).first()
                 if user_obj:
-                    user = authenticate(username=user_obj.username, password=password)
+                    user = authenticate(request, username=user_obj.username, password=password)
+                else:
+                    user = None
         
         if user:
-            print(f"🔐 User found: {user.username}, is_active: {user.is_active}")
-            if user.is_active:
-                login(request, user)
-                print(f"🔐 Login successful for user: {user.username}")
-                return Response(
-                    UserSerializer(user).data,
-                    status=status.HTTP_200_OK
-                )
-            else:
-                print(f"🔐 User account is inactive")
+            print(f"🔐 User found: {user.username}, is_active: {user.is_active}, is_email_verified: {getattr(user, 'is_email_verified', True)}")
+            if not user.is_active:
                 return Response(
                     {'error': 'Your account is inactive. Please contact support.'},
                     status=status.HTTP_401_UNAUTHORIZED
                 )
+            if not getattr(user, 'is_email_verified', True):
+                return Response(
+                    {
+                        'error': 'Please verify your email first. Check your inbox for the verification code.',
+                        'email_verified': False,
+                        'email': user.email,
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            login(request, user)
+            print(f"🔐 Login successful for user: {user.username}")
+            return Response(
+                UserSerializer(user).data,
+                status=status.HTTP_200_OK
+            )
         
         print(f"🔐 Authentication failed - Invalid credentials")
         return Response(
@@ -119,9 +177,8 @@ class UserViewSet(viewsets.ModelViewSet):
                 {'error': 'Email is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
             # Don't reveal whether email exists
             return Response(
                 {'success': True, 'message': 'If an account exists with this email, you will receive a code shortly.'},
@@ -197,9 +254,8 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
             return Response({'error': 'Invalid or expired code.'}, status=status.HTTP_400_BAD_REQUEST)
 
         from django.contrib.auth.password_validation import validate_password
@@ -215,6 +271,64 @@ class UserViewSet(viewsets.ModelViewSet):
         cache.delete(cache_key)
         return Response(
             {'success': True, 'message': 'Password has been reset. You can now log in.'},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=['post'], permission_classes=[])
+    def verify_email(self, request):
+        """Verify email with the 6-digit code sent on signup. No auth required."""
+        email = (request.data.get('email') or '').strip().lower()
+        code = (request.data.get('code') or '').strip()
+        if not email:
+            return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not code:
+            return Response({'error': 'Verification code is required'}, status=status.HTTP_400_BAD_REQUEST)
+        cache_key = f'email_verify:{email}'
+        stored_code = cache.get(cache_key)
+        if not stored_code or stored_code != code:
+            return Response(
+                {'error': 'Invalid or expired code. Please request a new code.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        # Mark all users with this email as verified (handles duplicate emails)
+        updated = User.objects.filter(email__iexact=email).update(is_email_verified=True)
+        cache.delete(cache_key)
+        if not updated:
+            return Response({'error': 'Invalid or expired code.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {'success': True, 'message': 'Email verified. You can now log in.'},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=['post'], permission_classes=[])
+    def resend_verification_code(self, request):
+        """Resend verification code to email. User must exist and not be verified. No auth required."""
+        email = (request.data.get('email') or '').strip().lower()
+        if not email:
+            return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+        # Prefer unverified user when multiple accounts share the same email
+        user = User.objects.filter(email__iexact=email).order_by('is_email_verified').first()
+        if not user:
+            return Response(
+                {'success': True, 'message': 'If an account exists with this email, you will receive a code shortly.'},
+                status=status.HTTP_200_OK
+            )
+        if user.is_email_verified:
+            return Response(
+                {'error': 'This email is already verified. You can log in.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        code = ''.join(random.choices(string.digits, k=6))
+        cache_key = f'email_verify:{email}'
+        cache.set(cache_key, code, timeout=900)
+        if not _send_verification_email(email, code):
+            cache.delete(cache_key)
+            return Response(
+                {'error': 'Failed to send email. Please try again later.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        return Response(
+            {'success': True, 'message': 'A new verification code has been sent to your email.'},
             status=status.HTTP_200_OK
         )
 

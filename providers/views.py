@@ -193,7 +193,137 @@ class ServiceProviderViewSet(viewsets.ModelViewSet):
                 {'error': 'Provider profile not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-    
+
+    @action(detail=False, methods=['post', 'patch'], permission_classes=[IsAuthenticated])
+    def update_profile(self, request):
+        """
+        Update provider business name, address, and contact. JSON body.
+        """
+        try:
+            provider = ServiceProvider.objects.get(user=request.user)
+            name = request.data.get('name')
+            contact = request.data.get('contact')
+            address = request.data.get('address')
+            location_string = request.data.get('location_string')
+            if name is not None:
+                provider.name = name.strip() if isinstance(name, str) else name
+            if contact is not None:
+                provider.contact = contact.strip() if isinstance(contact, str) else contact
+            if address is not None:
+                provider.address = address.strip() if isinstance(address, str) else address
+            if location_string is not None:
+                provider.location_string = location_string.strip() if isinstance(location_string, str) else location_string
+            provider.save()
+            serializer = self.get_serializer(provider)
+            return Response({'success': True, 'message': 'Profile updated.', 'provider': serializer.data})
+        except ServiceProvider.DoesNotExist:
+            return Response(
+                {'error': 'Provider profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def update_profile_photo(self, request):
+        """
+        Update provider profile (business) photo. Multipart: profile_photo.
+        """
+        try:
+            provider = ServiceProvider.objects.get(user=request.user)
+            if 'profile_photo' not in request.FILES:
+                return Response(
+                    {'error': 'profile_photo file is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            provider.profile_photo = request.FILES['profile_photo']
+            provider.save()
+            serializer = self.get_serializer(provider)
+            return Response({
+                'success': True,
+                'message': 'Profile photo updated.',
+                'profile_photo': request.build_absolute_uri(provider.profile_photo.url) if provider.profile_photo else None
+            })
+        except ServiceProvider.DoesNotExist:
+            return Response(
+                {'error': 'Provider profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def update_document(self, request):
+        """
+        Update PAN card or registration certificate. Multipart: document_type (pan_card | registration_certificate), file.
+        """
+        try:
+            provider = ServiceProvider.objects.get(user=request.user)
+            doc_type = (request.data.get('document_type') or request.POST.get('document_type') or '').strip().lower()
+            if doc_type not in ('pan_card', 'registration_certificate'):
+                return Response(
+                    {'error': 'document_type must be pan_card or registration_certificate'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            file_key = 'file'
+            if file_key not in request.FILES and doc_type in request.FILES:
+                file_key = doc_type
+            if file_key not in request.FILES:
+                return Response(
+                    {'error': 'A file is required for the document'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if doc_type == 'pan_card':
+                provider.pan_card = request.FILES[file_key]
+            else:
+                provider.registration_certificate = request.FILES[file_key]
+            provider.save()
+            serializer = self.get_serializer(provider)
+            return Response({
+                'success': True,
+                'message': f'{doc_type.replace("_", " ").title()} updated.',
+                'provider': serializer.data
+            })
+        except ServiceProvider.DoesNotExist:
+            return Response(
+                {'error': 'Provider profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def update_services(self, request):
+        """
+        Replace provider service categories. Body: { "service_ids": [1, 2, 3] }. Same as onboarding step 2.
+        """
+        try:
+            provider = ServiceProvider.objects.get(user=request.user)
+            service_ids = request.data.get('service_ids')
+            if not isinstance(service_ids, list):
+                return Response(
+                    {'error': 'service_ids must be a list of category IDs'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            valid_services = ServiceCategory.objects.filter(
+                id__in=service_ids,
+                is_active=True
+            )
+            if valid_services.count() != len(service_ids):
+                return Response(
+                    {'error': 'Some service IDs are invalid or inactive'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            ProviderService.objects.filter(provider=provider).delete()
+            for service in valid_services:
+                ProviderService.objects.create(provider=provider, service_category=service)
+            provider.save()
+            serializer = self.get_serializer(provider)
+            return Response({
+                'success': True,
+                'message': 'Service categories updated.',
+                'provider': serializer.data
+            })
+        except ServiceProvider.DoesNotExist:
+            return Response(
+                {'error': 'Provider profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def status(self, request):
         """
@@ -414,16 +544,8 @@ class ServiceProviderViewSet(viewsets.ModelViewSet):
             
             queryset = queryset.filter(id__in=available_providers)
         
-        # Sort by price
+        # Sort: by distance (nearest first) when user location is provided, else by price or created_at
         sort_by = request.query_params.get('sort_by', None)
-        if sort_by == 'price_low':
-            queryset = queryset.order_by('min_price')
-        elif sort_by == 'price_high':
-            queryset = queryset.order_by('-max_price', '-min_price')
-        else:
-            queryset = queryset.order_by('-created_at')
-        
-        # Debug: list providers being returned with distance
         from math import radians, cos, sin, asin, sqrt
         def _haversine_km(lat1, lon1, lat2, lon2):
             R = 6371
@@ -436,7 +558,27 @@ class ServiceProviderViewSet(viewsets.ModelViewSet):
         provider_list = list(queryset)
         user_lat = float(latitude) if latitude else None
         user_lon = float(longitude) if longitude else None
-        total_distance_km = 0.0
+
+        if user_lat is not None and user_lon is not None and sort_by not in ('price_low', 'price_high'):
+            # Sort by distance from user (nearest first) so radius filter shows adjacent providers first
+            provider_list.sort(
+                key=lambda p: (
+                    _haversine_km(user_lat, user_lon, float(p.latitude), float(p.longitude))
+                    if p.latitude is not None and p.longitude is not None
+                    else float('inf')
+                )
+            )
+        elif sort_by == 'price_low':
+            provider_list.sort(key=lambda p: (p.min_price is None, p.min_price or 0))
+        elif sort_by == 'price_high':
+            provider_list.sort(key=lambda p: (p.max_price is None, -(p.max_price or 0)))
+        else:
+            # Default: newest first (providers without created_at go last)
+            def _created_key(p):
+                if p.created_at is None:
+                    return (1, 0)
+                return (0, -p.created_at.timestamp())
+            provider_list.sort(key=_created_key)
 
         print(f"[DEBUG] Providers list: total={len(provider_list)}")
         print(f"[DEBUG] Query params: latitude={latitude}, longitude={longitude}, radius={radius}, service={service_id}, search={request.query_params.get('search')}")
@@ -444,13 +586,10 @@ class ServiceProviderViewSet(viewsets.ModelViewSet):
             dist_km = None
             if user_lat is not None and user_lon is not None and p.latitude is not None and p.longitude is not None:
                 dist_km = _haversine_km(user_lat, user_lon, float(p.latitude), float(p.longitude))
-                total_distance_km += dist_km
             dist_str = f" distance={dist_km} km" if dist_km is not None else " distance=N/A"
             print(f"  [{i+1}] id={p.id} name={p.name} lat={p.latitude} lon={p.longitude}{dist_str}")
-        if user_lat is not None and user_lon is not None:
-            print(f"[DEBUG] Total distance (sum of all): {round(total_distance_km, 2)} km")
 
-        serializer = self.get_serializer(queryset, many=True)
+        serializer = self.get_serializer(provider_list, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])

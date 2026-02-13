@@ -1,0 +1,24 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  /* User management: move Delete button to the right side of the submit row */
+  body.app-accounts.model-user .submit-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  body.app-accounts.model-user .submit-row .deletelink-box {
+    order: 2;
+    margin-left: auto;
+  }
+  body.app-accounts.model-user .submit-row input[type="submit"],
+  body.app-accounts.model-user .submit-row .default {
+    order: 1;
+  }
+</style>
+{% endblock %}
