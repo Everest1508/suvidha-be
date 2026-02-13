@@ -1,2 +1,2 @@
-# Sahayak Admin Panel for Sahayak
+# Sahayyak Admin Panel for Sahayyak
 

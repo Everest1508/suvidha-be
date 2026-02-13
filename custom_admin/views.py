@@ -20,7 +20,7 @@ def is_admin(user):
 
 
 def admin_login(request):
-    """Custom login page for Sahayak Admin"""
+    """Custom login page for Sahayyak Admin"""
     if request.user.is_authenticated and request.user.is_staff:
         return redirect('custom_admin:dashboard')
     
@@ -66,7 +66,7 @@ def admin_logout(request):
 @login_required(login_url='custom_admin:login')
 @user_passes_test(is_admin, login_url='custom_admin:login')
 def dashboard(request):
-    """Sahayak admin dashboard"""
+    """Sahayyak admin dashboard"""
     stats = {
         'total_users': User.objects.count(),
         'total_customers': User.objects.filter(role='customer').count(),
